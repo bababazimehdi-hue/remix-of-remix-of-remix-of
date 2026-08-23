@@ -14,6 +14,7 @@ import {
 } from "@/lib/store";
 import { faDateTimeLong, money, toFa } from "@/lib/format";
 import { RecordActions } from "@/components/records/RecordActions";
+import { ItemPhotoField } from "@/components/forms/ItemPhotoField";
 
 export const Route = createFileRoute("/purchase-invoices/$id")({
   head: () => ({
