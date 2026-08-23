@@ -16,7 +16,7 @@ export function ItemPhotoField({
 }: {
   id: string;
   value?: string | undefined;
-  onChange: (photo: string | undefined) => void;
+  onChange: (photo: string) => void;
   label?: string;
   disabled?: boolean;
 }) {
@@ -51,7 +51,7 @@ export function ItemPhotoField({
             <button
               type="button"
               aria-label="حذف تصویر محصول"
-              onClick={() => onChange(undefined)}
+              onClick={() => onChange("")}
               className="absolute end-1 top-1 rounded-lg bg-background/90 p-1 text-destructive"
             >
               <Trash2 className="size-4" />

@@ -198,7 +198,7 @@ function invoiceFromRow(r: Row): PurchaseInvoice {
       finalQty: i.final_qty == null ? undefined : num(i.final_qty),
       finalUnitPrice: i.final_unit_price == null ? undefined : num(i.final_unit_price),
       notes: i.notes ?? undefined,
-      photo: i.photo ?? undefined,
+      photo: i.photo || undefined,
     })),
   };
   return out as unknown as PurchaseInvoice;
@@ -224,7 +224,7 @@ const itemToRow = (invoiceId: string, i: PurchaseInvoice["items"][number]): Row 
   final_qty: i.finalQty ?? null,
   final_unit_price: i.finalUnitPrice ?? null,
   notes: i.notes ?? null,
-  photo: i.photo ?? null,
+  photo: i.photo || null,
 });
 
 function notificationFromRow(r: Row, viewerId: string | null): AppNotification {
