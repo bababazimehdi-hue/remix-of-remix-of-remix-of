@@ -14,6 +14,7 @@ import {
 } from "@/lib/store";
 import { faDateTimeLong, money, toFa } from "@/lib/format";
 import { RecordActions } from "@/components/records/RecordActions";
+import { ItemPhotoField } from "@/components/forms/ItemPhotoField";
 
 export const Route = createFileRoute("/purchase-invoices/$id")({
   head: () => ({
@@ -181,6 +182,15 @@ function InvoiceDetail() {
                     {money(Math.abs(d), state.currency)}
                   </span>
                 </div>
+              ) : null}
+
+              {editable || it.photo ? (
+                <ItemPhotoField
+                  id={it.id}
+                  value={it.photo}
+                  disabled={!editable}
+                  onChange={(photo) => patchItem(it.id, { photo })}
+                />
               ) : null}
 
               {editable && inv.status !== "FINALIZED" ? (

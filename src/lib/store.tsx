@@ -271,6 +271,8 @@ export type InvoiceItem = {
   finalQty?: number;
   finalUnitPrice?: number;
   notes?: string;
+  /** Optional product picture for this line item (data URL). Never required. */
+  photo?: string;
 };
 
 export type PurchaseInvoice = {
