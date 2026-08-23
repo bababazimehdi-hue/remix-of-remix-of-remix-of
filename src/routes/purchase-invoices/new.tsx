@@ -151,6 +151,11 @@ function NewInvoice() {
                   currency={state.currency}
                 />
               </div>
+              <ItemPhotoField
+                id={item.id}
+                value={item.photo}
+                onChange={(photo) => patchItem(item.id, { photo })}
+              />
             </div>
           ))}
 
