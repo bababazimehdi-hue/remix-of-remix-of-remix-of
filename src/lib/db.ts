@@ -224,6 +224,7 @@ const itemToRow = (invoiceId: string, i: PurchaseInvoice["items"][number]): Row 
   final_qty: i.finalQty ?? null,
   final_unit_price: i.finalUnitPrice ?? null,
   notes: i.notes ?? null,
+  photo: i.photo ?? null,
 });
 
 function notificationFromRow(r: Row, viewerId: string | null): AppNotification {
