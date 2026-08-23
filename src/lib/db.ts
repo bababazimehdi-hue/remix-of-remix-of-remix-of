@@ -198,6 +198,7 @@ function invoiceFromRow(r: Row): PurchaseInvoice {
       finalQty: i.final_qty == null ? undefined : num(i.final_qty),
       finalUnitPrice: i.final_unit_price == null ? undefined : num(i.final_unit_price),
       notes: i.notes ?? undefined,
+      photo: i.photo ?? undefined,
     })),
   };
   return out as unknown as PurchaseInvoice;
