@@ -183,6 +183,13 @@ function InvoiceDetail() {
                 </div>
               ) : null}
 
+              <ItemPhotoField
+                id={it.id}
+                value={it.photo}
+                disabled={!editable}
+                onChange={(photo) => patchItem(it.id, { photo })}
+              />
+
               {editable && inv.status !== "FINALIZED" ? (
                 <div className="grid gap-3 sm:grid-cols-2">
                   <Field
