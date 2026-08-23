@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/ui-kit";
 import { AmountField, DateField, Field, FormActions, TextArea } from "@/components/forms/fields";
 import { uid, useStore, type InvoiceItem } from "@/lib/store";
 import { money } from "@/lib/format";
+import { ItemPhotoField } from "@/components/forms/ItemPhotoField";
 
 export const Route = createFileRoute("/purchase-invoices/new")({
   head: () => ({
