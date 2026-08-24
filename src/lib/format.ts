@@ -10,6 +10,14 @@ import {
 } from "./datetime";
 
 const FA_DIGITS = ["۰", "۱", "۲", "۳", "۴", "۵", "۶", "۷", "۸", "۹"];
+const AR_DIGITS = ["٠", "١", "٢", "٣", "٤", "٥", "٦", "٧", "٨", "٩"];
+
+/** Normalizes both Persian and Arabic-Indic digits before numeric parsing. */
+function toLatinDigits(value: string): string {
+  return value
+    .replace(/[۰-۹]/g, (digit) => String(FA_DIGITS.indexOf(digit)))
+    .replace(/[٠-٩]/g, (digit) => String(AR_DIGITS.indexOf(digit)));
+}
 
 export function toFa(value: string | number): string {
   return String(value).replace(/\d/g, (d) => FA_DIGITS[Number(d)]!);
@@ -43,13 +51,15 @@ export const relativeTime = relativeTimeCore;
 
 /** Turns an input value into a grouped, Persian-digit amount for display. */
 export function formatAmountInput(raw: string): string {
-  const digits = raw.replace(/[^\d۰-۹]/g, "").replace(/[۰-۹]/g, (d) => String(FA_DIGITS.indexOf(d)));
+  const digits = toLatinDigits(raw).replace(/\D/g, "");
   if (!digits) return "";
   return toFa(groupDigits(Number(digits)));
 }
 
 export function parseAmountInput(raw: string): number {
-  const digits = raw.replace(/[۰-۹]/g, (d) => String(FA_DIGITS.indexOf(d))).replace(/[^\d]/g, "");
+  // Amounts are stored as whole currency units. Dots, commas, Arabic
+  // separators and spaces are grouping characters (e.g. 100.000 = 100000).
+  const digits = toLatinDigits(raw).replace(/\D/g, "");
   return digits ? Number(digits) : 0;
 }
 

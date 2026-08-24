@@ -294,7 +294,9 @@ export async function getSyncStats(): Promise<{
     pending: pending.length,
     syncing: syncing.length,
     failed: failed.length,
-    oldestPending: pending.length > 0 ? Math.min(...pending.map((op: any) => op.timestamp)) : undefined,
+    ...(pending.length > 0
+      ? { oldestPending: Math.min(...pending.map((op: any) => op.timestamp)) }
+      : {}),
   };
 }
 

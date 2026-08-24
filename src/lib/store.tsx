@@ -14,7 +14,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
 import { toAuthPassword } from "./auth-shared";
-import { loadAll, logActivity, subscribeAll, type SyncStatus } from "./db";
+import { loadAll, logActivity, pushChanges, subscribeAll, type SyncStatus } from "./db";
 import { resolveLoginEmail } from "./users.functions";
 import { getSyncEngine } from "./sync-engine";
 import { getNotificationService } from "./notification-service";
@@ -642,6 +642,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("connecting");
   const synced = useRef<State>(initialState);
   const pushing = useRef<Promise<void>>(Promise.resolve());
+  const pendingWrites = useRef(0);
   /** Monotonic ticket so a slow response can never overwrite a newer one. */
   const loadTicket = useRef(0);
   const inFlight = useRef(false);
@@ -682,6 +683,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setRaw((s) => ({ ...initialState, theme: s.theme, currentUserId: null }));
       synced.current = { ...initialState, currentUserId: null };
       setLoading(false);
+      return;
+    }
+    // Realtime events can arrive while an optimistic write is still in flight.
+    // Pulling at that moment would erase the new local record before its insert
+    // reaches the database, so defer reconciliation until all writes settle.
+    if (pendingWrites.current > 0) {
+      queued.current = true;
       return;
     }
     if (inFlight.current) {
@@ -880,20 +888,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const next = updater(prev);
         const base = synced.current;
         synced.current = next;
+        pendingWrites.current += 1;
         pushing.current = pushing.current
           .then(async () => {
-            // Use SyncEngine for reliable offline-first sync
             await syncEngine.saveLocalState(next);
-            await syncEngine.triggerSync();
+            // Persist the actual state diff. Saving a snapshot alone does not
+            // create database operations and was the reason records vanished.
+            await pushChanges(base, next, next.currentUserId);
           })
           .then(() => {
-            // The optimistic state is never the source of truth: once the write
-            // is acknowledged we reconcile against what the database actually has.
+            pendingWrites.current = Math.max(0, pendingWrites.current - 1);
             void refresh(next.currentUserId);
           })
           .catch((err: unknown) => {
+            pendingWrites.current = Math.max(0, pendingWrites.current - 1);
             toast.error(err instanceof Error ? err.message : "ذخیره در سرور ناموفق بود.");
-            return refresh(next.currentUserId);
+            // Keep the optimistic/local snapshot visible on a transient network
+            // failure instead of silently making the user's record disappear.
           });
         return next;
       });
@@ -965,7 +976,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           ...rest,
           priority,
           vibratePattern: pattern,
-          userIds: n.userIds,
+          ...(n.userIds ? { userIds: n.userIds } : {}),
           userRole: n.userRole,
           title: n.title,
           body: n.body,
@@ -973,23 +984,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           type: n.type,
         }, n.event as any).then(result => {
           if (result.success) {
-            // Also update local state for immediate UI feedback
-            setState((s) => ({
-              ...s,
-              notifications: [
-                {
-                  ...rest,
-                  priority,
-                  vibratePattern: pattern,
-                  id: result.notificationId!,
-                  isRead: false,
-                  createdAt: nowISO(),
-                  deliverAt: new Date().toISOString(),
-                  delivered: false,
-                },
-                ...s.notifications,
-              ],
-            }));
+            // NotificationService has already queued this exact row. Reflect it
+            // locally without sending a second insert through the state diff.
+            const row: AppNotification = {
+              ...rest,
+              priority,
+              vibratePattern: pattern,
+              id: result.notificationId ?? uid("n"),
+              isRead: false,
+              createdAt: nowISO(),
+              deliverAt: new Date().toISOString(),
+              delivered: false,
+            };
+            setRaw((s) => ({ ...s, notifications: [row, ...s.notifications] }));
+            synced.current = {
+              ...synced.current,
+              notifications: [row, ...synced.current.notifications],
+            };
           } else {
             toast.error(result.error ?? "ارسال اعلان ناموفق بود.");
           }

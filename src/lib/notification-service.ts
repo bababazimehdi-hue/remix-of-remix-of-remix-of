@@ -51,6 +51,7 @@ export class NotificationService {
       
       const fullNotification: AppNotification = {
         ...notification,
+        priority: notification.priority ?? 'NORMAL',
         id: notificationId,
         isRead: false,
         createdAt: nowISO(),
