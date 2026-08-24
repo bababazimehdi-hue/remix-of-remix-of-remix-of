@@ -68,7 +68,7 @@ function NewExpense() {
           id: uid("e"),
           category: cat,
           amount,
-          date: new Date(`${date}T${new Date().toTimeString().slice(0, 8)}`).toISOString(),
+          date,
           description,
           ...(cat === "MISCELLANEOUS" && name.trim() ? { name: name.trim() } : {}),
           ...(relatedUserId ? { relatedUserId } : {}),

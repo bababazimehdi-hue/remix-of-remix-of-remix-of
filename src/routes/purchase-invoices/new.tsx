@@ -60,7 +60,7 @@ function NewInvoice() {
           id: uid("i"),
           invoiceNumber: number,
           supplier,
-          date: new Date(date).toISOString(),
+          date,
           status: "PRE_INVOICE",
           notes,
           createdBy: user.id,
