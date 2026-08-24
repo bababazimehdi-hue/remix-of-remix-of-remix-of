@@ -14,8 +14,11 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
 import { toAuthPassword } from "./auth-shared";
-import { loadAll, logActivity, pushChanges, subscribeAll, type SyncStatus } from "./db";
+import { loadAll, logActivity, subscribeAll, type SyncStatus } from "./db";
 import { resolveLoginEmail } from "./users.functions";
+import { getSyncEngine } from "./sync-engine";
+import { getNotificationService } from "./notification-service";
+import { useSyncEngine } from "./use-sync-engine";
 
 
 export type Role =
@@ -867,6 +870,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [loading, state.notifications, state.alarms, currentUser]);
 
   const value = useMemo<Ctx>(() => {
+    // Initialize sync engine and notification service once
+    const syncEngine = getSyncEngine();
+    const notificationService = getNotificationService();
+    
     /** Applies a change locally, then mirrors it to the cloud for every device. */
     const setState = (updater: (s: State) => State) => {
       setRaw((prev) => {
@@ -874,7 +881,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const base = synced.current;
         synced.current = next;
         pushing.current = pushing.current
-          .then(() => pushChanges(base, next, next.currentUserId))
+          .then(async () => {
+            // Use SyncEngine for reliable offline-first sync
+            await syncEngine.saveLocalState(next);
+            await syncEngine.triggerSync();
+          })
           .then(() => {
             // The optimistic state is never the source of truth: once the write
             // is acknowledged we reconcile against what the database actually has.
@@ -938,38 +949,52 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           toast.error(err instanceof Error ? err.message : "ثبت تاریخچه ناموفق بود.");
         });
       },
-      notify: (n) =>
-        setState((s) => {
-          const cfg = n.event ? s.alarms.events?.[n.event] : undefined;
-          // The main admin can switch a whole event category off.
-          if (cfg && !cfg.enabled) return s;
-          const priority: NotifyLevel = n.priority ?? cfg?.level ?? "NORMAL";
-          const roles = n.userIds?.length
-            ? s.users.filter((u) => n.userIds!.includes(u.id)).map((u) => u.role)
-            : n.userRole;
-          const deliverAt =
-            priority === "URGENT" ? new Date() : computeDeliverAt(s.alarms, roles, new Date());
-          const pattern =
-            n.vibratePattern ??
-            (cfg && !cfg.vibrate ? [] : levelPattern(priority, s.alarms));
-          const { event: _event, ...rest } = n;
-          return {
-            ...s,
-            notifications: [
-              {
-                ...rest,
-                priority,
-                vibratePattern: pattern,
-                id: uid("n"),
-                isRead: false,
-                createdAt: nowISO(),
-                deliverAt: deliverAt.toISOString(),
-                delivered: false,
-              },
-              ...s.notifications,
-            ],
-          };
-        }),
+      notify: (n) => {
+        // Use NotificationService for cross-device sync
+        const cfg = n.event ? state.alarms.events?.[n.event] : undefined;
+        // The main admin can switch a whole event category off.
+        if (cfg && !cfg.enabled) return;
+        const priority: NotifyLevel = n.priority ?? cfg?.level ?? "NORMAL";
+        const pattern =
+          n.vibratePattern ??
+          (cfg && !cfg.vibrate ? [] : levelPattern(priority, state.alarms));
+        const { event: _event, ...rest } = n;
+        
+        // Send via NotificationService (syncs across devices via Supabase)
+        void notificationService.send({
+          ...rest,
+          priority,
+          vibratePattern: pattern,
+          userIds: n.userIds,
+          userRole: n.userRole,
+          title: n.title,
+          body: n.body,
+          url: n.url,
+          type: n.type,
+        }, n.event as any).then(result => {
+          if (result.success) {
+            // Also update local state for immediate UI feedback
+            setState((s) => ({
+              ...s,
+              notifications: [
+                {
+                  ...rest,
+                  priority,
+                  vibratePattern: pattern,
+                  id: result.notificationId!,
+                  isRead: false,
+                  createdAt: nowISO(),
+                  deliverAt: new Date().toISOString(),
+                  delivered: false,
+                },
+                ...s.notifications,
+              ],
+            }));
+          } else {
+            toast.error(result.error ?? "ارسال اعلان ناموفق بود.");
+          }
+        });
+      },
     };
   }, [state, loading, refresh, syncStatus, resync]);
 
