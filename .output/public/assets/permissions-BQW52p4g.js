@@ -1,1 +1,0 @@
-import{rt as e}from"./Logo-CNrj0caa.js";import{c as t}from"./ui-kit-DOEYkiYU.js";import{t as n}from"./PermissionsManager-BB9QqGYO.js";var r=e(),i=()=>(0,r.jsx)(t,{children:(0,r.jsx)(n,{})});export{i as component};

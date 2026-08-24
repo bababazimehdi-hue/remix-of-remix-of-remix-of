@@ -23,7 +23,6 @@ import icExports from "@/assets/icons/exports.png";
 import icShield from "@/assets/icons/shield.png";
 import icUsers from "@/assets/icons/users.png";
 import icSettings from "@/assets/icons/settings.png";
-import { SyncStatusIndicator } from "@/lib/use-sync-engine";
 
 type NavItem = {
   to: string;
@@ -277,7 +276,6 @@ export function AppShell({ children }: { children: ReactNode }) {
             </div>
 
             <div className="flex shrink-0 items-center gap-2">
-              <SyncStatusIndicator />
               <NotificationBell user={user} />
 
               <Link to="/account" aria-label="تنظیمات کاربری" className="relative shrink-0">

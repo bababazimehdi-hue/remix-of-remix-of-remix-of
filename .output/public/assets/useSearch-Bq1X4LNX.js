@@ -1,1 +1,0 @@
-import{c as e}from"./dist-BualiU0n.js";function t(t){return e({from:t.from,strict:t.strict,shouldThrow:t.shouldThrow,structuralSharing:t.structuralSharing,select:e=>t.select?t.select(e.search):e.search})}export{t};
