@@ -984,23 +984,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           type: n.type,
         }, n.event as any).then(result => {
           if (result.success) {
-            // Also update local state for immediate UI feedback
-            setState((s) => ({
-              ...s,
-              notifications: [
-                {
-                  ...rest,
-                  priority,
-                  vibratePattern: pattern,
-                   id: result.notificationId ?? uid("n"),
-                  isRead: false,
-                  createdAt: nowISO(),
-                  deliverAt: new Date().toISOString(),
-                  delivered: false,
-                },
-                ...s.notifications,
-              ],
-            }));
+            // NotificationService has already queued this exact row. Reflect it
+            // locally without sending a second insert through the state diff.
+            const row: AppNotification = {
+              ...rest,
+              priority,
+              vibratePattern: pattern,
+              id: result.notificationId ?? uid("n"),
+              isRead: false,
+              createdAt: nowISO(),
+              deliverAt: new Date().toISOString(),
+              delivered: false,
+            };
+            setRaw((s) => ({ ...s, notifications: [row, ...s.notifications] }));
+            synced.current = {
+              ...synced.current,
+              notifications: [row, ...synced.current.notifications],
+            };
           } else {
             toast.error(result.error ?? "ارسال اعلان ناموفق بود.");
           }
