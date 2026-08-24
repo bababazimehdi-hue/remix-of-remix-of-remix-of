@@ -14,11 +14,9 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
 import { toAuthPassword } from "./auth-shared";
-import { loadAll, logActivity, subscribeAll, type SyncStatus } from "./db";
+import { loadAll, logActivity, pushChanges, subscribeAll, type SyncStatus } from "./db";
 import { resolveLoginEmail } from "./users.functions";
-import { getSyncEngine } from "./sync-engine";
-import { getNotificationService } from "./notification-service";
-import { useSyncEngine } from "./use-sync-engine";
+import { clearState, loadState, saveState } from "./offline-db";
 
 
 export type Role =
@@ -623,6 +621,70 @@ type Ctx = {
 
 const StoreContext = createContext<Ctx | null>(null);
 
+/** Key under which an unconfirmed write is parked in IndexedDB until it lands. */
+const pendingPushKey = (userId: string) => `pending-push:${userId}`;
+
+const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/** Resolves as soon as the browser reports it is back online, or after `ms`. */
+function waitForOnlineOrTimeout(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      window.removeEventListener("online", onOnline);
+      clearTimeout(timer);
+      resolve();
+    };
+    const onOnline = () => finish();
+    const timer = setTimeout(finish, ms);
+    if (typeof window !== "undefined") window.addEventListener("online", onOnline);
+  });
+}
+
+/**
+ * Pushes one state transition to Supabase, retrying automatically so a flaky
+ * connection (or a full internet outage) never silently drops a write.
+ *
+ * - The pending `{ base, next }` pair is parked in IndexedDB first, so a page
+ *   reload while offline can resume the exact same push later.
+ * - While the browser is offline, retries continue indefinitely (with a
+ *   capped backoff), because the failure is expected and no data must be lost.
+ * - While online, a persistent failure (5 attempts, a few seconds) is more
+ *   likely a real/validation error, so it is surfaced to the caller instead
+ *   of retrying forever.
+ */
+async function pushWithRetry(base: State, next: State, userId: string | null): Promise<void> {
+  if (!userId) return;
+  try {
+    await saveState(pendingPushKey(userId), { base, next });
+  } catch {
+    /* IndexedDB unavailable (private mode, etc.): push still proceeds live. */
+  }
+  let attempt = 0;
+  for (;;) {
+    try {
+      await pushChanges(base, next, userId);
+      try {
+        await clearState(pendingPushKey(userId));
+      } catch {
+        /* best effort */
+      }
+      return;
+    } catch (err) {
+      attempt += 1;
+      const offline = typeof navigator !== "undefined" && navigator.onLine === false;
+      if (!offline && attempt >= 5) throw err;
+      if (offline) {
+        await waitForOnlineOrTimeout(Math.min(30_000, 2_000 * 2 ** Math.min(attempt, 4)));
+      } else {
+        await delay(Math.min(10_000, 500 * 2 ** attempt));
+      }
+    }
+  }
+}
+
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, setState_] = useState<State>(initialState);
   /**
@@ -719,6 +781,29 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     void refresh(activeUserId.current);
   }, [refresh]);
 
+  /**
+   * If the app was closed/reloaded while a write was still being retried
+   * (e.g. mid internet outage), resume it now instead of losing it.
+   */
+  const resumePendingPush = useCallback(
+    async (userId: string) => {
+      let pending: { base: State; next: State } | null = null;
+      try {
+        pending = await loadState<{ base: State; next: State }>(pendingPushKey(userId));
+      } catch {
+        return;
+      }
+      if (!pending) return;
+      pushing.current = pushing.current
+        .then(() => pushWithRetry(pending!.base, pending!.next, userId))
+        .then(() => void refresh(userId))
+        .catch((err: unknown) => {
+          toast.error(err instanceof Error ? err.message : "ذخیره در سرور ناموفق بود.");
+        });
+    },
+    [refresh],
+  );
+
   // Session bootstrap + realtime sync.
   useEffect(() => {
     let stop: (() => void) | undefined;
@@ -746,8 +831,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const userId = data.session?.user.id ?? null;
       activeUserId.current = userId;
       await refresh(userId);
-      if (userId) start(userId);
-      else setSyncStatus("offline");
+      if (userId) {
+        start(userId);
+        void resumePendingPush(userId);
+      } else setSyncStatus("offline");
     })();
 
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
@@ -870,10 +957,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [loading, state.notifications, state.alarms, currentUser]);
 
   const value = useMemo<Ctx>(() => {
-    // Initialize sync engine and notification service once
-    const syncEngine = getSyncEngine();
-    const notificationService = getNotificationService();
-    
     /** Applies a change locally, then mirrors it to the cloud for every device. */
     const setState = (updater: (s: State) => State) => {
       setRaw((prev) => {
@@ -881,11 +964,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const base = synced.current;
         synced.current = next;
         pushing.current = pushing.current
-          .then(async () => {
-            // Use SyncEngine for reliable offline-first sync
-            await syncEngine.saveLocalState(next);
-            await syncEngine.triggerSync();
-          })
+          .then(() => pushWithRetry(base, next, next.currentUserId))
           .then(() => {
             // The optimistic state is never the source of truth: once the write
             // is acknowledged we reconcile against what the database actually has.
@@ -949,52 +1028,42 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           toast.error(err instanceof Error ? err.message : "ثبت تاریخچه ناموفق بود.");
         });
       },
-      notify: (n) => {
-        // Use NotificationService for cross-device sync
-        const cfg = n.event ? state.alarms.events?.[n.event] : undefined;
-        // The main admin can switch a whole event category off.
-        if (cfg && !cfg.enabled) return;
-        const priority: NotifyLevel = n.priority ?? cfg?.level ?? "NORMAL";
-        const pattern =
-          n.vibratePattern ??
-          (cfg && !cfg.vibrate ? [] : levelPattern(priority, state.alarms));
-        const { event: _event, ...rest } = n;
-        
-        // Send via NotificationService (syncs across devices via Supabase)
-        void notificationService.send({
-          ...rest,
-          priority,
-          vibratePattern: pattern,
-          userIds: n.userIds,
-          userRole: n.userRole,
-          title: n.title,
-          body: n.body,
-          url: n.url,
-          type: n.type,
-        }, n.event as any).then(result => {
-          if (result.success) {
-            // Also update local state for immediate UI feedback
-            setState((s) => ({
-              ...s,
-              notifications: [
-                {
-                  ...rest,
-                  priority,
-                  vibratePattern: pattern,
-                  id: result.notificationId!,
-                  isRead: false,
-                  createdAt: nowISO(),
-                  deliverAt: new Date().toISOString(),
-                  delivered: false,
-                },
-                ...s.notifications,
-              ],
-            }));
-          } else {
-            toast.error(result.error ?? "ارسال اعلان ناموفق بود.");
-          }
-        });
-      },
+      // Notifications go through the exact same setState → pushChanges path
+      // as every other record, so they sync across devices with the same
+      // reliability/retry guarantees and respect the admin's alarm window
+      // (AlarmSettings.startHour/endHour/roles) via computeDeliverAt below.
+      notify: (n) =>
+        setState((s) => {
+          const cfg = n.event ? s.alarms.events?.[n.event] : undefined;
+          // The main admin can switch a whole event category off.
+          if (cfg && !cfg.enabled) return s;
+          const priority: NotifyLevel = n.priority ?? cfg?.level ?? "NORMAL";
+          const roles = n.userIds?.length
+            ? s.users.filter((u) => n.userIds!.includes(u.id)).map((u) => u.role)
+            : n.userRole;
+          const deliverAt =
+            priority === "URGENT" ? new Date() : computeDeliverAt(s.alarms, roles, new Date());
+          const pattern =
+            n.vibratePattern ??
+            (cfg && !cfg.vibrate ? [] : levelPattern(priority, s.alarms));
+          const { event: _event, ...rest } = n;
+          return {
+            ...s,
+            notifications: [
+              {
+                ...rest,
+                priority,
+                vibratePattern: pattern,
+                id: uid("n"),
+                isRead: false,
+                createdAt: nowISO(),
+                deliverAt: deliverAt.toISOString(),
+                delivered: false,
+              },
+              ...s.notifications,
+            ],
+          };
+        }),
     };
   }, [state, loading, refresh, syncStatus, resync]);
 

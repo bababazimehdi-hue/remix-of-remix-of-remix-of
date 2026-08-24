@@ -12,4 +12,12 @@ export default defineConfig({
     // nitro/vite builds from this
     server: { entry: "server" },
   },
+  // This sandbox is E2B-based, not a "Lovable sandbox" (no LOVABLE_SANDBOX / DEV_SERVER__PROJECT_PATH
+  // env vars), so the package's own sandbox auto-detection never relaxes Vite's host checking.
+  // Allow all hosts here so the sandbox's public proxy hostname isn't rejected with a 403.
+  vite: {
+    server: {
+      allowedHosts: true,
+    },
+  },
 });
