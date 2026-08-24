@@ -14,7 +14,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
 import { toAuthPassword } from "./auth-shared";
-import { loadAll, logActivity, subscribeAll, type SyncStatus } from "./db";
+import { loadAll, logActivity, pushChanges, subscribeAll, type SyncStatus } from "./db";
 import { resolveLoginEmail } from "./users.functions";
 import { getSyncEngine } from "./sync-engine";
 import { getNotificationService } from "./notification-service";
