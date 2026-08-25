@@ -27,6 +27,8 @@ export type SaveUserInput = {
   customRole?: string;
   /** Optional free-form notes about the person. */
   bio?: string;
+  /** Data URL or link of the profile photo ("" clears it). */
+  avatarUrl?: string;
   permissions: Record<string, boolean>;
   password?: string;
 };
@@ -90,8 +92,9 @@ export const saveTeamUser = createServerFn({ method: "POST" })
     const { data: allowed } = await context.supabase.rpc("is_org_owner", {
       _user_id: context.userId,
     });
-    if (!allowed) throw new Error("فقط پشتیبان می‌تواند کاربران و دسترسی‌ها را مدیریت کند.");
     const isSelf = !!data.id && data.id === context.userId;
+    if (!allowed && !isSelf)
+      throw new Error("فقط پشتیبان می‌تواند کاربران و دسترسی‌ها را مدیریت کند.");
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const profile = {
@@ -104,6 +107,7 @@ export const saveTeamUser = createServerFn({ method: "POST" })
       is_archived: !!data.isArchived,
       custom_role: data.customRole?.trim() || null,
       bio: data.bio?.trim() ?? "",
+      avatar_url: data.avatarUrl?.trim() ? data.avatarUrl.trim() : null,
       permissions: data.permissions ?? {},
     };
 
@@ -115,7 +119,9 @@ export const saveTeamUser = createServerFn({ method: "POST" })
             full_name: profile.full_name,
             username: profile.username,
             phone: profile.phone,
+            title: profile.title,
             bio: profile.bio,
+            avatar_url: profile.avatar_url,
           }
         : profile;
       const { error } = await supabaseAdmin.from("profiles").update(writable).eq("id", data.id);

@@ -48,6 +48,7 @@ function userFromRow(p: Row, role: Role): User {
     customRole: p.custom_role ?? undefined,
     title: p.title ?? "",
     bio: (p.bio as string | null) ?? "",
+    avatarUrl: (p.avatar_url as string | null) ?? undefined,
     permissions: (p.permissions ?? {}) as Record<string, boolean>,
   };
   return out as unknown as User;
@@ -640,6 +641,7 @@ export async function pushChanges(prev: State, next: State, viewerId: string | n
           isArchived: !!u.isArchived,
           customRole: u.customRole ?? "",
           bio: u.bio ?? "",
+          avatarUrl: u.avatarUrl ?? "",
           permissions: u.permissions ?? {},
           ...(u.password ? { password: u.password } : {}),
         },
