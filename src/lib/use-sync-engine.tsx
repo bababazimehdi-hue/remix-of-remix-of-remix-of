@@ -95,9 +95,8 @@ export function SyncStatusIndicator() {
   };
 
   return (
-    <div className="flex items-center gap-2 text-xs">
+    <div className="flex items-center text-xs" title={getStatusText()}>
       <div className={`w-2 h-2 rounded-full ${getStatusColor()}`} />
-      <span className="text-muted-foreground">{getStatusText()}</span>
     </div>
   );
 }
