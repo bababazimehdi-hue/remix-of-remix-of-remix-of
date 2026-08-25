@@ -213,12 +213,26 @@ export const TASK_STATUS_LABEL: Record<TaskStatus, string> = {
   SYNCED_TO_ACCOUNTING: "ثبت در حسابداری",
 };
 
+export type RepairType = "INTERNAL" | "CUSTOMER";
+
+export const REPAIR_TYPE_LABEL: Record<RepairType, string> = {
+  INTERNAL: "تعمیرات خودمان",
+  CUSTOMER: "تعمیرات مشتری",
+};
+
+export const REPAIR_TYPE_HINT: Record<RepairType, string> = {
+  INTERNAL: "تعمیر توسط تیم ما",
+  CUSTOMER: "تعمیر برای مشتری",
+};
+
 export type Task = {
   id: string;
   /** Assigned worker. Empty string means a general (unassigned) task. */
   workerId: string;
   /** Bicycle (purchase) this repair task belongs to, when created from inventory. */
   bikeId?: string;
+  /** Whether the repair is done by the shop team or belongs to a customer. */
+  repairType?: RepairType;
   title: string;
   description: string;
   priority: Priority;

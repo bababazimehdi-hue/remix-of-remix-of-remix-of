@@ -655,6 +655,7 @@ export type Database = {
           photos: Json
           priority: string
           reject_reason: string | null
+          repair_type: string
           status: string
           submitted_at: string | null
           title: string
@@ -683,6 +684,7 @@ export type Database = {
           photos?: Json
           priority?: string
           reject_reason?: string | null
+          repair_type?: string
           status?: string
           submitted_at?: string | null
           title?: string
@@ -711,6 +713,7 @@ export type Database = {
           photos?: Json
           priority?: string
           reject_reason?: string | null
+          repair_type?: string
           status?: string
           submitted_at?: string | null
           title?: string

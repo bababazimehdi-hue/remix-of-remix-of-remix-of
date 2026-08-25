@@ -1,7 +1,7 @@
 import { nowISO } from "@/lib/datetime";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { Plus, Search, Wrench } from "lucide-react";
+import { Info, Plus, Search, User as UserIcon, Wrench } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/layout/AppShell";
 import { Chip, EmptyState, FilterChips, ListSkeleton, PageHeader } from "@/components/ui-kit";
@@ -9,10 +9,13 @@ import { AmountField, DateField, Field, SelectField, TextArea } from "@/componen
 import {
   PRIORITY_LABEL,
   TASK_STATUS_LABEL,
+  REPAIR_TYPE_HINT,
+  REPAIR_TYPE_LABEL,
   can,
   uid,
   useStore,
   type Priority,
+  type RepairType,
   type TaskStatus,
 } from "@/lib/store";
 import { money, toFa } from "@/lib/format";
@@ -59,6 +62,7 @@ function TasksPage() {
   const [newOpen, setNewOpen] = useState(false);
 
   const [form, setForm] = useState({
+    repairType: "INTERNAL" as RepairType,
     workerId: "",
     title: "",
     description: "",
@@ -93,6 +97,7 @@ function TasksPage() {
       tasks: [
         {
           id: uid("t"),
+          repairType: form.repairType,
           workerId: form.workerId,
           title: form.title,
           description: form.description,
@@ -115,7 +120,15 @@ function TasksPage() {
       event: "NEW_TASK",
     });
     setNewOpen(false);
-    setForm({ workerId: "", title: "", description: "", priority: "MEDIUM", dueDate: "", wage: 0 });
+    setForm({
+      repairType: "INTERNAL",
+      workerId: "",
+      title: "",
+      description: "",
+      priority: "MEDIUM",
+      dueDate: "",
+      wage: 0,
+    });
     toast.success("وظیفه جدید ثبت شد");
   }
 
@@ -272,6 +285,39 @@ function TasksPage() {
             <SheetTitle>ایجاد وظیفه جدید</SheetTitle>
           </SheetHeader>
           <form onSubmit={createTask} className="space-y-4 p-4" noValidate>
+            <div className="space-y-2">
+              <span className="block text-sm font-bold text-muted-foreground">نوع تعمیر</span>
+              <div className="grid grid-cols-2 gap-3">
+                {(["CUSTOMER", "INTERNAL"] as RepairType[]).map((t) => {
+                  const selected = form.repairType === t;
+                  return (
+                    <button
+                      key={t}
+                      type="button"
+                      aria-pressed={selected}
+                      onClick={() => setForm({ ...form, repairType: t })}
+                      className="flex min-h-20 items-center justify-between gap-3 rounded-2xl border border-border bg-card px-4 py-3 text-start transition-all"
+                    >
+                      <span className="flex-1">
+                        <span className="block text-sm font-extrabold">{REPAIR_TYPE_LABEL[t]}</span>
+                        <span className="mt-0.5 block text-xs text-muted-foreground">
+                          {REPAIR_TYPE_HINT[t]}
+                        </span>
+                      </span>
+                      {t === "INTERNAL" ? (
+                        <Wrench className="size-6 shrink-0 text-primary" />
+                      ) : (
+                        <UserIcon className="size-6 shrink-0 text-muted-foreground" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="flex items-center gap-2 rounded-xl border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                <Info className="size-4 shrink-0" />
+                نوع تعمیر را انتخاب کنید تا فیلدهای مرتبط نمایش داده شوند.
+              </p>
+            </div>
             <SelectField
               id="worker"
               label="انتخاب کارمند"
