@@ -17,6 +17,12 @@ export const ensureDefaultOwner = createServerFn({ method: "POST" }).handler(
     console.log("[ensureDefaultOwner] started");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { createClient } = await import("@supabase/supabase-js");
+    const backendUrl = process.env['SUPABASE_URL'];
+    const publishableKey = process.env['SUPABASE_PUBLISHABLE_KEY'];
+
+    if (!backendUrl || !publishableKey) {
+      throw new Error("تنظیمات بک‌اند برای راه‌اندازی سامانه کامل نیست.");
+    }
 
     const { data: init } = await supabaseAdmin
       .from("system_initialization")
@@ -31,31 +37,40 @@ export const ensureDefaultOwner = createServerFn({ method: "POST" }).handler(
       .limit(1);
     console.log("[ensureDefaultOwner] profiles check:", profiles);
     if (profiles && profiles.length > 0) {
-      // A profile exists but initialization wasn't finalized. Sign in as the
-      // first profile and call initialize_system so auth.uid() resolves.
-      const { data: firstProfile } = await supabaseAdmin
-        .from("profiles")
-        .select("username")
+      // Existing installs can have a valid owner while the singleton
+      // initialization row is missing (for example after a remix/import). In
+      // that case do not sign in as an arbitrary profile; repair the marker
+      // from the trusted server side using the organization owner.
+      const { data: existingOwner } = await supabaseAdmin
+        .from("organizations")
+        .select("owner_id")
+        .not("owner_id", "is", null)
         .limit(1)
-        .single();
-      const username = String((firstProfile as { username?: string })?.username ?? INITIAL_OWNER_SUGGESTION.username);
-      const email = usernameToEmail(username);
-      const authClient = createClient<Database>(
-        process.env['SUPABASE_URL']!,
-        process.env['SUPABASE_PUBLISHABLE_KEY']!,
-        {
-          auth: { storage: undefined, persistSession: false, autoRefreshToken: false },
-        },
-      );
-      const { data: signInData, error: signInError } = await authClient.auth.signInWithPassword({
-        email,
-        password: toAuthPassword(INITIAL_OWNER_SUGGESTION.password),
-      });
-      if (signInError || !signInData.session) {
-        throw new Error(signInError?.message ?? "ورود به حساب صاحب سیستم ناموفق بود.");
+        .maybeSingle();
+      const ownerId = String((existingOwner as { owner_id?: string | null } | null)?.owner_id ?? "");
+
+      if (!ownerId) {
+        throw new Error("پروفایل کاربری وجود دارد اما صاحب سیستم مشخص نیست.");
       }
-      const { error: initError } = await authClient.rpc("initialize_system");
-      if (initError) throw new Error(initError.message);
+
+      const { error: roleError } = await supabaseAdmin.from("user_roles").upsert(
+        {
+          user_id: ownerId,
+          role: "OWNER",
+        },
+        { onConflict: "user_id,role" },
+      );
+      if (roleError) throw new Error(roleError.message);
+
+      const { error: initRepairError } = await supabaseAdmin.from("system_initialization").upsert({
+        id: true,
+        is_initialized: true,
+        initialized_at: new Date().toISOString(),
+        initialized_by: ownerId,
+      });
+      if (initRepairError) {
+        throw new Error(initRepairError.message);
+      }
       return { ok: true, created: false };
     }
 
@@ -106,8 +121,8 @@ export const ensureDefaultOwner = createServerFn({ method: "POST" }).handler(
     // initialize_system reads auth.uid(), so we sign in as the new owner first.
     console.log("[ensureDefaultOwner] signing in as owner to initialize system");
     const authClient = createClient<Database>(
-      process.env['SUPABASE_URL']!,
-      process.env['SUPABASE_PUBLISHABLE_KEY']!,
+      backendUrl,
+      publishableKey,
       {
         auth: { storage: undefined, persistSession: false, autoRefreshToken: false },
       },
