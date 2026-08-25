@@ -404,3 +404,72 @@
   border-radius: var(--radius-2xl);
   box-shadow: 0 18px 40px -30px oklch(0 0 0 / 0.9);
 }
+
+
+/* ——— وضعیت انتخاب‌شده یکپارچه در کل اپ (برگرفته از تصویر مرجع) ——— */
+:root {
+  --sel-orange: #ff7a00;
+  --sel-orange-soft: #ff9c33;
+}
+
+@utility pressable {
+  transition:
+    background 220ms ease,
+    color 220ms ease,
+    border-color 220ms ease,
+    box-shadow 260ms ease,
+    transform 160ms ease;
+}
+
+/* حالت عادی: ذغالی/خنثی و آرام */
+button[aria-pressed="false"],
+[role="tab"][data-state="inactive"],
+[role="option"][aria-selected="false"] {
+  transition:
+    background 220ms ease,
+    color 220ms ease,
+    border-color 220ms ease,
+    box-shadow 260ms ease,
+    transform 160ms ease;
+}
+
+/* حالت انتخاب‌شده: پس‌زمینه تیره با گرادیان نارنجی + بردر و گلو نارنجی */
+button[aria-pressed="true"],
+a[aria-pressed="true"],
+[role="tab"][data-state="active"],
+[role="option"][aria-selected="true"],
+[data-selected="true"],
+.is-selected {
+  background-image:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--sel-orange) 88%, transparent),
+      color-mix(in srgb, var(--sel-orange) 55%, black 30%)
+    ),
+    linear-gradient(180deg, #14100c, #0d0b09) !important;
+  background-color: #0f0d0b !important;
+  color: #ffffff !important;
+  border: 1px solid var(--sel-orange) !important;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--sel-orange) 45%, transparent),
+    0 8px 26px -10px color-mix(in srgb, var(--sel-orange) 75%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--sel-orange-soft) 55%, transparent) !important;
+  transition:
+    background 220ms ease,
+    color 220ms ease,
+    border-color 220ms ease,
+    box-shadow 260ms ease,
+    transform 160ms ease;
+}
+
+button[aria-pressed="true"] svg,
+[role="tab"][data-state="active"] svg,
+[data-selected="true"] svg,
+.is-selected svg {
+  color: #ffffff;
+}
+
+/* ناوبری پایین/لینک فعال */
+a[aria-current="page"]:not([data-plain]) {
+  color: var(--sel-orange) !important;
+}
