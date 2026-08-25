@@ -53,10 +53,13 @@ export const ensureDefaultOwner = createServerFn({ method: "POST" }).handler(
         throw new Error("پروفایل کاربری وجود دارد اما صاحب سیستم مشخص نیست.");
       }
 
-      const { error: roleError } = await supabaseAdmin.from("user_roles").upsert({
-        user_id: ownerId,
-        role: "OWNER",
-      });
+      const { error: roleError } = await supabaseAdmin.from("user_roles").upsert(
+        {
+          user_id: ownerId,
+          role: "OWNER",
+        },
+        { onConflict: "user_id,role" },
+      );
       if (roleError) throw new Error(roleError.message);
 
       const { error: initRepairError } = await supabaseAdmin.from("system_initialization").upsert({
