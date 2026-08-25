@@ -429,7 +429,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                     )}
                   >
                     <span className="relative">
-                      <NavIcon src={item.img} className={active ? "" : "opacity-60 grayscale"} />
+                      <NavIcon src={item.img} className={active ? "brightness-0 invert" : "opacity-70"} />
                       {item.key === "notifications" && unread > 0 ? (
                         <span className="absolute -end-1 -top-1 size-2 rounded-full bg-destructive" />
                       ) : null}
